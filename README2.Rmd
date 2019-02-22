@@ -1,0 +1,164 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Vybrala sme si dataset iris.
+Jedná sa o dáta veµkosti okvetných lístkov 50 jedincov z ka¾dého druhu (3 druhy) rastliny Iris: Iris setosa, versicolor a virgnica.
+```{r}
+data(iris)
+dataset<-iris
+help(iris)
+```
+Najprv si zistíme koµko ridkov a ståpcov sa vo vybranom datasete nachádza pomocou funkcie dim
+```{r}
+dim(dataset)
+```
+Ïalej zistíme, aké vlastnosti nám tieto dáta poskytujú
+```{r}
+sapply(dataset, class)
+```
+Zisti» presne èo head robí
+```{r}
+head(dataset)
+```
+
+Premenná triedy je faktorom. Faktor je trieda, ktorá má viacero ¹títkov alebo úrovní triedy. Pozrime sa na úrovne.
+```{r}
+levels(dataset$Species)
+```
+Máme iba jeden level a jedná sa teda o multi-class level.Následne sa pozrieme na distribúciu jednotlivých tried v absolútnom poète aj percentuálnom zastúpení.
+```{r}
+percentage <- prop.table(table(dataset$Species)) * 100
+cbind(freq=table(dataset$Species), percentage=percentage)
+```
+Mô¾eme vidie», ¾e ka¾dá trieda má rovnaký poèet prípadov (50 alebo 33% celej mno¾iny údajov).
+
+Následne sa pozrieme na zhrnutie ka¾dého atribútu.
+```{r}
+summary(dataset)
+```
+Teraz máme základnú my¹lienku o údajoch. Budeme vytvára» jednoduché grafy pre jednotlivé atribúty a následne aj grafy viacrozmerné pre pochopenie vz»ahov medzi atribútmi.
+Je u¾itoèné, ak vizualizácia má spôsob, ako odkazova» len na vstupné atribúty a len výstupné atribúty. Hurá na boxploty.
+```{r}
+x <- dataset[,1:4]
+y <- dataset[,5]
+par(mfrow=c(1,4))
+  for(i in 1:4) {
+  boxplot(x[,i], main=names(iris)[i])
+}
+```
+Mô¾eme vidie», ¾e v¹etky údaje majú podobný rozsah (a rovnaké jednotky centimetrov). Mô¾eme tie¾ vidie», ¾e Sepal.Width má pre túto vzorku niekoµko okrajových hodnôt.
+```{r}
+plot(y)
+```
+Toto nám dokazuje, ¾e hodnoty sú rovnomerne rozdelené vo v¹etkých 3 druhoch rastliny.
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+featurePlot(x=x, y=y, plot="box")
+```
+Tu vidíme, ¾e pre ka¾dú triedu je rozdielna distribúcia hodnôt.
+
+Následne pou¾ijeme density plot.
+```{r}
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=x, y=y, plot="density", scales=scales)
+```
+Podobne ako pri boxplotoch mô¾eme vidie» rozdiel v distribúcii artribútov podµa triedy. Taktie¾ pozorujeme Gaussovskú distribúciu (zvonová krivka) ka¾dého atribútu.
+
+Vyu¾ijeme mo¾nos» pou¾i» ggplot2, ktorý je veµmi výkonným balíkom zalo¾ený na koncepte "Grammar of Graphics (gg)". Umo¾òuje vytvori» graf podµa konkrétnej syntaxe. Produkuje viac esteticky príjemné a výkonnej¹ie grafy ako základná grafika pomocou kompaktnej¹ieho kódu pre graf podobnej zlo¾itosti.
+```{r}
+library(ggplot2)
+```
+Vytvoríme si bodový diagram
+```{r}
+g <- ggplot(data=dataset, aes(x = Petal.Length, y = Petal.Width))
+print(g)
+```
+```{r}
+g <-g + 
+    geom_point(aes(color=Species, shape=Species)) +
+    xlab("Petal Length") +
+    ylab("Petal Width") +
+    ggtitle("Petal Length-Width")+
+    geom_smooth(method="lm")
+print(g)
+```
+Mô¾eme vidie» prelínanie druhov versicolor a virginica.
+
+Boxplot
+```{r}
+box <- ggplot(data=dataset, aes(x=Species, y=Sepal.Length)) +
+    geom_boxplot(aes(fill=Species)) + 
+    ylab("Sepal Length") +
+    ggtitle("Iris Boxplot") +
+    stat_summary(fun.y=mean, geom="point", shape=5, size=4) 
+print(box)
+```
+```{r}
+library(ggthemes)
+```
+Histogram
+```{r}
+histogram <- ggplot(data=iris, aes(x=Sepal.Width)) +
+    geom_histogram(binwidth=0.2, color="black", aes(fill=Species)) + 
+    xlab("Sepal Width") +  
+    ylab("Frequency") + 
+    ggtitle("Histogram of Sepal Width")+
+    theme_economist()
+print(histogram)
+```
+Faceting: vytváranie viacerých grafov na jednom výstupe.
+```{r}
+library(ggthemes)
+facet <- ggplot(data=dataset, aes(Sepal.Length, y=Sepal.Width, color=Species))+
+    geom_point(aes(shape=Species), size=1.5) + 
+    geom_smooth(method="lm") +
+    xlab("Sepal Length") +
+    ylab("Sepal Width") +
+    ggtitle("Faceting") +
+    theme_fivethirtyeight() +
+    facet_grid(. ~ Species) # Along rows
+print(facet)
+```
+Budovanie modelu klasifikácie druhov rastliny IRIS
+
+Hlavná otázka: Zaradenie jedinca na základe dát (sepal length/width, petal length/width) vzhµadom k datasetu k druhu ratsliny (Iris setosa/versicolor/virginica)
+
+Pou¾ijeme Diskriminaènú analýzu
+
+Model diskriminaènej analýzy sa vo v¹eobecnosti pou¾íva pre malé súbory údajov, ktoré by inak trpeli malým zaujatím vzorky v iných modeloch.
+
+Rozlo¾íme si dáta na 2 èasti - tréningovú (trainset) a testovú (testset).
+```{r}
+library(caret)
+library(lattice)
+index <- createDataPartition(iris$Species, p=0.80, list=FALSE)
+testset <- iris[-index,]
+trainset <- iris[index,]
+```
+Fitovanie a zobrazenie modelu LDA
+```{r}
+library(MASS)
+set.seed(1000)
+model.lda<-train(x = trainset[,1:4],y = trainset[,5], method = "lda",metric = "Accuracy")
+print(model.lda)
+```
+Overenie správnosti tréningovej mno¾iny, resp. èasti.
+```{r}
+pred<-predict(object = model.lda,newdata = trainset[,1:4])
+confusionMatrix(pred,trainset$Species)
+```
+Vykonanie modelu na testovacej mno¾ine (èasti)
+```{r}
+pred_test<-predict(object = model.lda,newdata = testset[,1:4])
+confusionMatrix(pred_test,testset$Species)
+```
+Z ¹tatistiky testovacej mno¾iny vidíme Accuracy: 1 (presnos»), èo je najlep¹í mo¾ný výsledok. 
+
+Samozrejme na to, aby sme mohli potvrdi» ¾e presnos» tejto ¹tatistiky je najlep¹ia, by sme museli vytvori» aj iné modely (napr. DTs = Decision Tree Classifiers, Gradient Boosting, Misclassified Observations).
+
+
+Poznámka:
+Pri snahe o poslovenèenie grafov mi kód robil problémy a preto som sa tomu rad¹ej vyhla.
